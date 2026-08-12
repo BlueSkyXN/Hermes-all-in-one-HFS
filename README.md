@@ -1,0 +1,148 @@
+---
+title: Hermes Agent All-in-One
+colorFrom: yellow
+colorTo: indigo
+sdk: docker
+app_port: 7860
+suggested_hardware: cpu-basic
+pinned: false
+license: gpl-3.0
+---
+
+# Hermes Agent All-in-One for Hugging Face Space
+
+This repository packages [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent)
+as a Hugging Face Docker Space. It exposes the upstream browser Dashboard and
+embedded Chat on one public port without copying the upstream source into this
+wrapper repository.
+
+## Deployment target
+
+- GitHub wrapper: <https://github.com/BlueSkyXN/Hermes-all-in-one-HFS>
+- Hugging Face Space: <https://huggingface.co/spaces/BlueSkyXN/Hermes-all-in-one-HFS>
+- Live app: <https://blueskyxn-hermes-all-in-one-hfs.hf.space>
+- Space mode: Docker, protected preview, `cpu-basic`
+- Public port: `7860`
+- Persistent state: private bucket mounted at `/data`
+
+## Upstream pin
+
+The wrapper derives from one immutable upstream release image:
+
+```text
+repository:     https://github.com/NousResearch/hermes-agent
+release:        v2026.8.3 (Hermes Agent 0.20.0)
+source commit:  3c27eb6234bf91b8ceee9e9071591b31e9b148cb
+image:          nousresearch/hermes-agent:v2026.8.3
+image digest:   sha256:16788311e2fa3035456bdc1bafb8ec2b1777db64ebf020af9bb7eb73c3712c9e
+```
+
+The digest is the multi-architecture manifest published by the upstream release.
+The wrapper extends that release image, fixes its runtime account to UID/GID
+`1000`, bypasses the root/s6 bootstrap that is incompatible with HF Spaces, and
+keeps `/opt/hermes` immutable. Mutable state belongs under `/data/hermes`.
+
+## Runtime
+
+```text
+Hugging Face proxy
+        |
+        v
+Hermes Dashboard / FastAPI :7860
+  |- Web Dashboard and embedded Chat at /
+  |- public liveness at /api/health
+  `- authenticated management APIs and WebSockets under /api
+
+/data/hermes
+  |- config.yaml and provider credentials
+  |- sessions, memories, skills, plans, and workspace
+  |- SQLite databases and logs
+  `- Dashboard and gateway runtime state
+```
+
+This first deployment is deliberately **UI-first**. It does not start the
+separate messaging gateway or expose Hermes' OpenAI-compatible `/v1/*` service.
+Those services use a different internal process and port; exposing both would
+require a reverse proxy and multi-process lifecycle that are not needed for the
+requested browser deployment.
+
+The Space runs `hermes dashboard --host 0.0.0.0 --port 7860 --no-open` through
+`entrypoint.sh`. Non-loopback Dashboard binds are fail-closed upstream, so the
+wrapper requires these Space settings:
+
+```text
+Variable: ADMIN_USERNAME
+Secret:   ADMIN_PASSWORD
+Secret:   OPS_TOKEN
+```
+
+The wrapper maps `ADMIN_USERNAME` and `ADMIN_PASSWORD` to the upstream Dashboard
+Basic Auth variables. It maps `OPS_TOKEN` to the upstream session-signing secret
+so browser login sessions survive Space restarts. `OPENROUTER_API_KEY` is an
+optional Space Secret for the default inference provider; other upstream
+providers can be configured through the authenticated Dashboard after launch.
+
+## HFS classification
+
+```text
+standard:       HFS v3.0
+project_class:  preview
+target_role:    primary
+sovereignty:    port
+lane:           artifact
+version_source: tag
+visibility:     protected Space / private bucket
+```
+
+The artifact lane uses the upstream's immutable, CI-tested release image rather
+than rebuilding its multi-gigabyte Python, Node, Chromium, SQLite, and s6 stack
+inside every Space build. This is recorded as an HFS deviation because the
+application layer remains an upstream business image.
+
+## Persistence boundary
+
+Mount a private Hugging Face Storage Bucket read-write at `/data` before relying
+on sessions, memory, skills, provider configuration, or OAuth state. Without the
+mount, `/data/hermes` is ephemeral and can be lost on rebuild, restart, or stop.
+
+Only one Hermes instance may write a given `HERMES_HOME`. Do not mount the same
+bucket path into multiple concurrently running Hermes Spaces. Storage Bucket
+SQLite behavior must be accepted through an actual write, Space restart, and
+readback; a `RUNNING` stage or HTTP health response alone does not prove durable
+state.
+
+## Local validation boundary
+
+The wrapper can be built locally, but doing so pulls and executes the roughly
+1 GB compressed upstream image and writes Docker build cache. Keep routine
+validation static and let the Space perform the first integration build unless
+an explicit local third-party execution check is required.
+
+```bash
+./scripts/static-check.sh
+docker build -t hermes-all-in-one-hfs .
+```
+
+After deployment:
+
+```bash
+curl -fsS https://blueskyxn-hermes-all-in-one-hfs.hf.space/api/health
+```
+
+## Known platform limits
+
+- `cpu-basic` Spaces sleep when idle, interrupting unattended gateway and cron
+  work; this preview is an on-demand browser app, not an always-on bot host.
+- The container has no host Docker socket, so Hermes' Docker terminal backend is
+  unavailable. The default local backend executes inside the Space sandbox.
+- Model inference and optional tools require their own provider credentials and
+  outbound HTTPS availability.
+- Basic Auth is a single shared credential without MFA. The protected Space edge
+  is the outer access boundary; for a public internet deployment, use the
+  upstream Nous OAuth or a self-hosted OIDC provider instead.
+
+## Licensing
+
+The wrapper files in this repository are provided under GPL-3.0. The upstream
+Hermes Agent application remains MIT-licensed and retains its license and notices
+inside the pinned image.

@@ -1,0 +1,24 @@
+standard = "3.0"
+project = "hermes-all-in-one-hfs"
+space = "BlueSkyXN/Hermes-all-in-one-HFS"
+
+project_class = "preview"
+target_role = "primary"
+sovereignty = "port"
+lane = "artifact"
+version_source = "tag"
+
+space_visibility = "protected"
+bucket_visibility = "private"
+
+env_file = ".env"
+local_only = ["HF_TOKEN", "GH_TOKEN"]
+secrets = ["ADMIN_PASSWORD", "OPS_TOKEN"]
+optional_secrets = [
+  "OPENROUTER_API_KEY",
+]
+variables = ["ADMIN_USERNAME"]
+
+deviations = [
+  "business-image = The upstream release image remains the application artifact because rebuilding its multi-gigabyte Python, Node, Chromium, SQLite, and s6 stack inside every Space build adds cost without changing the HFS runtime contract.",
+]
