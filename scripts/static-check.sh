@@ -48,10 +48,14 @@ required_snippets = (
     "XDG_CACHE_HOME=/tmp/hermes-cache",
     "EXPOSE 7860",
     'ENTRYPOINT ["/usr/local/bin/hermes-hfs-entrypoint"]',
+    'DEFAULT_CONFIG.get("_config_version")',
 )
 for snippet in required_snippets:
     if snippet not in dockerfile:
         raise SystemExit(f"Dockerfile is missing runtime contract: {snippet}")
+
+if r'DEFAULT_CONFIG[\"_config_version\"]' in dockerfile:
+    raise SystemExit("Dockerfile must not pass escaped quotes to the Python schema check")
 
 for key in ("ADMIN_USERNAME", "ADMIN_PASSWORD", "OPS_TOKEN"):
     if key not in entrypoint:

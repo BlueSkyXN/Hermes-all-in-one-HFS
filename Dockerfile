@@ -51,7 +51,7 @@ RUN set -eux; \
     test "$(tr -d '[:space:]' < /opt/hermes/.hermes_build_sha)" = "${HERMES_SOURCE_REF}"; \
     test "$(/opt/hermes/.venv/bin/python -c 'import sqlite3; print(sqlite3.sqlite_version)')" = "3.53.4"; \
     test "$(/opt/hermes/.venv/bin/python -c 'from hermes_cli import __version__; print(__version__)')" = "${HERMES_VERSION}"; \
-    test "$(/opt/hermes/.venv/bin/python -c 'from hermes_cli.config_defaults import DEFAULT_CONFIG; print(DEFAULT_CONFIG[\"_config_version\"])')" = "${HERMES_CONFIG_VERSION}"; \
+    test "$(/opt/hermes/.venv/bin/python -c 'from hermes_cli.config_defaults import DEFAULT_CONFIG; print(DEFAULT_CONFIG.get("_config_version"))')" = "${HERMES_CONFIG_VERSION}"; \
     /opt/hermes/.venv/bin/python -m py_compile /usr/local/lib/hermes-hfs/runtime-preflight.py; \
     rm -rf /usr/local/lib/hermes-hfs/__pycache__
 
