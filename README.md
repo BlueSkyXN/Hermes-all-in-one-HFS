@@ -40,7 +40,9 @@ image digest:   sha256:16788311e2fa3035456bdc1bafb8ec2b1777db64ebf020af9bb7eb73c
 The digest is the multi-architecture manifest published by the upstream release.
 The wrapper extends that release image, fixes its runtime account to UID/GID
 `1000`, bypasses the root/s6 bootstrap that is incompatible with HF Spaces, and
-keeps `/opt/hermes` immutable. Mutable state belongs under `/data/hermes`.
+keeps `/opt/hermes` immutable. Mutable state belongs under `/data/hermes`; the
+UV download cache is redirected to ephemeral `/tmp/hermes-cache` so rebuildable
+cache objects do not consume the persistent bucket.
 
 ## Runtime
 
@@ -102,14 +104,33 @@ application layer remains an upstream business image.
 ## Persistence boundary
 
 Mount a private Hugging Face Storage Bucket read-write at `/data` before relying
-on sessions, memory, skills, provider configuration, or OAuth state. Without the
-mount, `/data/hermes` is ephemeral and can be lost on rebuild, restart, or stop.
+on sessions, memory, skills, provider configuration, or OAuth state. Startup now
+fails closed without the mount. A new empty bucket must also contain the
+`hermes/` prefix before the UID `1000` process can create its directory tree:
+
+```bash
+./scripts/prepare-bucket-prefix.sh --apply
+```
+
+That command performs the one intentional remote write: it creates the
+non-sensitive `hermes/.hfs-bucket-seed` marker (`{}`), then reads back both the
+exact marker content and the read-write `/data` mount. Routine checks use
+`--check`, which is read-only. The marker is part of the deployment contract,
+not application data.
 
 Only one Hermes instance may write a given `HERMES_HOME`. Do not mount the same
 bucket path into multiple concurrently running Hermes Spaces. Storage Bucket
 SQLite behavior must be accepted through an actual write, Space restart, and
 readback; a `RUNNING` stage or HTTP health response alone does not prove durable
-state.
+state. Every startup also performs a throwaway SQLite WAL transaction,
+reopen/readback, cleanup, and read-only `PRAGMA quick_check` on existing Hermes
+databases. It then migrates a compatible `config.yaml` to the schema baked into
+the pinned upstream image, with backup, rollback, and post-migration readback;
+an explicitly ancient or newer-than-runtime schema fails closed.
+
+The tracked [`hfs-dev.toml`](hfs-dev.toml) is the deployment declaration. Hermes
+business settings remain in the upstream `/data/hermes/config.yaml`; this
+wrapper intentionally does not invent a second application `config.toml`.
 
 ## Local validation boundary
 
@@ -120,6 +141,7 @@ an explicit local third-party execution check is required.
 
 ```bash
 ./scripts/static-check.sh
+./scripts/prepare-bucket-prefix.sh --check
 docker build -t hermes-all-in-one-hfs .
 ```
 
@@ -137,9 +159,22 @@ curl -fsS https://blueskyxn-hermes-all-in-one-hfs.hf.space/api/health
   unavailable. The default local backend executes inside the Space sandbox.
 - Model inference and optional tools require their own provider credentials and
   outbound HTTPS availability.
-- Basic Auth is a single shared credential without MFA. The protected Space edge
-  is the outer access boundary; for a public internet deployment, use the
-  upstream Nous OAuth or a self-hosted OIDC provider instead.
+- Basic Auth is a single shared credential without MFA. A direct `hf.space`
+  domain can remain internet-reachable even when HF reports the repository as
+  private/protected, so Basic Auth is the effective application access gate for
+  this preview. Keep it as an explicitly accepted preview risk; for a durable
+  public deployment, use upstream Nous OAuth or a self-hosted OIDC provider.
+
+## Acceptance status
+
+The current deliverable is a Dashboard preview, not a fully accepted Hermes
+Agent service. `RUNNING`, `/api/health`, authenticated Dashboard access, and the
+persistence preflight prove the wrapper/runtime layer. Dashboard business
+acceptance still requires a configured model provider and one real
+prompt/response persisted across restart. The messaging gateway, channels,
+cron, and `/v1/*` surfaces remain out of scope unless they are explicitly
+selected and separately accepted. Until then, `gateway_running=false` and an
+overall degraded `/api/status` are expected consequences of the UI-first scope.
 
 ## Licensing
 

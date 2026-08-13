@@ -5,6 +5,8 @@ readonly install_dir="/opt/hermes"
 readonly data_root="${HERMES_HOME:-/data/hermes}"
 readonly expected_uid="1000"
 readonly expected_source_ref="${HERMES_HFS_EXPECTED_SOURCE_REF:-3c27eb6234bf91b8ceee9e9071591b31e9b148cb}"
+readonly runtime_preflight="/usr/local/lib/hermes-hfs/runtime-preflight.py"
+readonly data_prefix_help="pre-create its bucket prefix with scripts/prepare-bucket-prefix.sh --apply"
 
 fail() {
   printf '[hermes-hfs] ERROR: %s\n' "$*" >&2
@@ -31,13 +33,20 @@ test "$(id -u)" = "${expected_uid}" \
 test -d "${install_dir}" || fail "immutable Hermes install is missing"
 test -x "${install_dir}/.venv/bin/hermes" || fail "Hermes executable is missing"
 test -f "${install_dir}/.hermes_build_sha" || fail "upstream build provenance is missing"
+test -f "${runtime_preflight}" || fail "HFS runtime preflight is missing"
 test "$(tr -d '[:space:]' < "${install_dir}/.hermes_build_sha")" = "${expected_source_ref}" \
   || fail "upstream image source does not match the declared release commit"
 
 is_descendant "${data_root}" \
   || fail "HERMES_HOME must be a child of /data"
 test ! -L "${data_root}" || fail "HERMES_HOME must not be a symlink"
-mkdir -p \
+if ! command -v mountpoint >/dev/null 2>&1 || ! mountpoint -q /data; then
+  fail "/data must be a mounted persistent volume"
+fi
+if ! mkdir -p "${data_root}"; then
+  fail "cannot create HERMES_HOME; ${data_prefix_help}"
+fi
+if ! mkdir -p \
   "${data_root}" \
   "${data_root}/backups" \
   "${data_root}/cron" \
@@ -53,14 +62,15 @@ mkdir -p \
   "${data_root}/sessions" \
   "${data_root}/skills" \
   "${data_root}/skins" \
-  "${data_root}/workspace"
+  "${data_root}/workspace"; then
+  fail "cannot initialize the persistent Hermes directory structure"
+fi
 test -w "${data_root}" || fail "HERMES_HOME is not writable"
 
-if command -v mountpoint >/dev/null 2>&1 && mountpoint -q /data; then
-  printf '[hermes-hfs] persistent volume detected at /data\n'
-else
-  printf '[hermes-hfs] WARNING: /data is not a mounted volume; Hermes state is ephemeral\n' >&2
-fi
+export XDG_CACHE_HOME="${XDG_CACHE_HOME:-/tmp/hermes-cache}"
+export UV_CACHE_DIR="${UV_CACHE_DIR:-${XDG_CACHE_HOME}/uv}"
+mkdir -p "${XDG_CACHE_HOME}" "${UV_CACHE_DIR}"
+printf '[hermes-hfs] persistent volume detected at /data\n'
 
 seed_once() {
   local source="$1"
@@ -77,6 +87,8 @@ if [[ ! -e "${data_root}/.env" ]]; then
   install -m 0600 /dev/null "${data_root}/.env"
 fi
 chmod 0600 "${data_root}/.env"
+
+"${install_dir}/.venv/bin/python" "${runtime_preflight}" --home "${data_root}"
 
 if [[ -f "${install_dir}/tools/skills_sync.py" ]]; then
   "${install_dir}/.venv/bin/python" "${install_dir}/tools/skills_sync.py" \

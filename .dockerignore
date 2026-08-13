@@ -6,4 +6,6 @@ local
 .DS_Store
 __pycache__
 .pytest_cache
-scripts
+scripts/*
+!scripts/runtime-preflight.py
+tests

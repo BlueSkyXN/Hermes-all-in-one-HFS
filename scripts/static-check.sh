@@ -6,6 +6,7 @@ readonly root
 cd "${root}"
 
 bash -n entrypoint.sh
+bash -n scripts/prepare-bucket-prefix.sh
 
 ROOT="${root}" python3 - <<'PY'
 import os
@@ -15,7 +16,7 @@ import tomllib
 
 root = pathlib.Path(os.environ["ROOT"])
 
-for name in ("hfs-dev.toml", "config.toml"):
+for name in ("hfs-dev.toml",):
     with (root / name).open("rb") as handle:
         tomllib.load(handle)
 
@@ -26,6 +27,7 @@ for line in ("sdk: docker", "app_port: 7860", "license: gpl-3.0"):
 
 dockerfile = (root / "Dockerfile").read_text(encoding="utf-8")
 entrypoint = (root / "entrypoint.sh").read_text(encoding="utf-8")
+preflight = (root / "scripts/runtime-preflight.py").read_text(encoding="utf-8")
 
 digest_match = re.search(r"sha256:[0-9a-f]{64}", dockerfile)
 if digest_match is None:
@@ -43,6 +45,7 @@ for name, content in (("README.md", readme), ("entrypoint.sh", entrypoint)):
 required_snippets = (
     "USER hermes",
     "HERMES_HOME=/data/hermes",
+    "XDG_CACHE_HOME=/tmp/hermes-cache",
     "EXPOSE 7860",
     'ENTRYPOINT ["/usr/local/bin/hermes-hfs-entrypoint"]',
 )
@@ -54,15 +57,30 @@ for key in ("ADMIN_USERNAME", "ADMIN_PASSWORD", "OPS_TOKEN"):
     if key not in entrypoint:
         raise SystemExit(f"entrypoint.sh is missing required auth input: {key}")
 
+for snippet in (
+    'fail "/data must be a mounted persistent volume"',
+    'runtime-preflight.py',
+    'prepare-bucket-prefix.sh --apply',
+):
+    if snippet not in entrypoint:
+        raise SystemExit(f"entrypoint.sh is missing startup contract: {snippet}")
+
+for snippet in ("migration_action", "PRAGMA journal_mode=WAL", "PRAGMA quick_check"):
+    if snippet not in preflight:
+        raise SystemExit(f"runtime-preflight.py is missing contract: {snippet}")
+
 print("static contract: PASS")
 PY
+
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p 'test_*.py'
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/runtime-preflight.py --self-test
 
 if [[ -d .git ]]; then
   git diff --check
 fi
 
 if command -v shellcheck >/dev/null 2>&1; then
-  shellcheck entrypoint.sh scripts/static-check.sh
+  shellcheck entrypoint.sh scripts/static-check.sh scripts/prepare-bucket-prefix.sh
 fi
 
 if command -v hadolint >/dev/null 2>&1; then
