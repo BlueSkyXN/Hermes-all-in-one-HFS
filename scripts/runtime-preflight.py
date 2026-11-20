@@ -115,7 +115,7 @@ def _migrate_with_rollback(
 
 def migrate_config_schema(home: Path) -> None:
     """Run the pinned upstream migration with backup, rollback, and readback."""
-    import yaml
+    import hermes_yaml as yaml
     from hermes_cli.config import (
         check_config_version,
         get_config_path,
