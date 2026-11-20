@@ -40,6 +40,8 @@ ENV PYTHONUNBUFFERED=1 \
 COPY entrypoint.sh /usr/local/bin/hermes-hfs-entrypoint
 COPY scripts/runtime-preflight.py /usr/local/lib/hermes-hfs/runtime-preflight.py
 
+# v0.23.3's sealed interpreter reports SQLite 3.53.1. The image also ships
+# libsqlite 3.53.4, but that copy is not what the Hermes venv links.
 RUN set -eux; \
     groupmod --gid 1000 hermes; \
     usermod --uid 1000 --gid 1000 --home /data/hermes hermes; \
@@ -52,7 +54,7 @@ RUN set -eux; \
     test "$(/opt/hermes/.venv/bin/python -c 'import json; print(json.load(open("/opt/hermes/install-stamp.json", encoding="utf-8"))["commit"])')" = "${HERMES_SOURCE_REF}"; \
     test "$(/opt/hermes/.venv/bin/python -c 'import json; print(json.load(open("/opt/hermes/install-stamp.json", encoding="utf-8"))["baseVersion"])')" = "${HERMES_VERSION}"; \
     test "$(/opt/hermes/.venv/bin/python -c 'import json; print(json.load(open("/etc/hermes/image-provenance.json", encoding="utf-8"))["revision"])')" = "${HERMES_SOURCE_REF}"; \
-    test "$(/opt/hermes/.venv/bin/python -c 'import sqlite3; print(sqlite3.sqlite_version)')" = "3.53.4"; \
+    test "$(/opt/hermes/.venv/bin/python -c 'import sqlite3; print(sqlite3.sqlite_version)')" = "3.53.1"; \
     test "$(/opt/hermes/.venv/bin/python -c 'from hermes_cli import __version__; print(__version__)')" = "${HERMES_VERSION}"; \
     test "$(/opt/hermes/.venv/bin/python -c 'from hermes_cli.config_defaults import DEFAULT_CONFIG; print(DEFAULT_CONFIG.get("_config_version"))')" = "${HERMES_CONFIG_VERSION}"; \
     /opt/hermes/.venv/bin/python -m py_compile /usr/local/lib/hermes-hfs/runtime-preflight.py; \
