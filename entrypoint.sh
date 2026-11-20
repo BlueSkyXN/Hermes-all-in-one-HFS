@@ -4,7 +4,7 @@ set -euo pipefail
 readonly install_dir="/opt/hermes"
 readonly data_root="${HERMES_HOME:-/data/hermes}"
 readonly expected_uid="1000"
-readonly expected_source_ref="${HERMES_HFS_EXPECTED_SOURCE_REF:-3c27eb6234bf91b8ceee9e9071591b31e9b148cb}"
+readonly expected_source_ref="${HERMES_HFS_EXPECTED_SOURCE_REF:-caafe5389ae585ef77387a962aee05b1bcf17029}"
 readonly runtime_preflight="/usr/local/lib/hermes-hfs/runtime-preflight.py"
 readonly data_prefix_help="pre-create its bucket prefix with scripts/prepare-bucket-prefix.sh --apply"
 
@@ -32,9 +32,10 @@ test "$(id -u)" = "${expected_uid}" \
   || fail "runtime UID must be ${expected_uid} on Hugging Face Spaces"
 test -d "${install_dir}" || fail "immutable Hermes install is missing"
 test -x "${install_dir}/.venv/bin/hermes" || fail "Hermes executable is missing"
-test -f "${install_dir}/.hermes_build_sha" || fail "upstream build provenance is missing"
+test -f "${install_dir}/install-stamp.json" || fail "upstream install stamp is missing"
 test -f "${runtime_preflight}" || fail "HFS runtime preflight is missing"
-test "$(tr -d '[:space:]' < "${install_dir}/.hermes_build_sha")" = "${expected_source_ref}" \
+stamp_commit="$("${install_dir}/.venv/bin/python" -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["commit"])' "${install_dir}/install-stamp.json")"
+test "${stamp_commit}" = "${expected_source_ref}" \
   || fail "upstream image source does not match the declared release commit"
 
 is_descendant "${data_root}" \

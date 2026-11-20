@@ -1,13 +1,13 @@
 # syntax=docker/dockerfile:1.7
 
-ARG HERMES_IMAGE=nousresearch/hermes-agent:v2026.8.3@sha256:16788311e2fa3035456bdc1bafb8ec2b1777db64ebf020af9bb7eb73c3712c9e
+ARG HERMES_IMAGE=nousresearch/hermes-agent:v0.23.3@sha256:3e9fe4c6ef36490f43aa0d0d80f9df64e9c92a576eee3042f1a97c8813c05355
 
 FROM ${HERMES_IMAGE}
 
-ARG HERMES_RELEASE=v2026.8.3
-ARG HERMES_VERSION=0.20.0
-ARG HERMES_SOURCE_REF=3c27eb6234bf91b8ceee9e9071591b31e9b148cb
-ARG HERMES_CONFIG_VERSION=33
+ARG HERMES_RELEASE=v0.23.3
+ARG HERMES_VERSION=0.23.3
+ARG HERMES_SOURCE_REF=caafe5389ae585ef77387a962aee05b1bcf17029
+ARG HERMES_CONFIG_VERSION=54
 
 LABEL org.opencontainers.image.title="Hermes Agent All-in-One HFS" \
       org.opencontainers.image.description="Hermes Agent Dashboard adapted for a Hugging Face Docker Space" \
@@ -15,7 +15,7 @@ LABEL org.opencontainers.image.title="Hermes Agent All-in-One HFS" \
       org.opencontainers.image.version="${HERMES_RELEASE}" \
       org.opencontainers.image.revision="${HERMES_SOURCE_REF}" \
       org.opencontainers.image.licenses="GPL-3.0-only AND MIT" \
-      io.huggingface.hfs.upstream.image="nousresearch/hermes-agent:v2026.8.3@sha256:16788311e2fa3035456bdc1bafb8ec2b1777db64ebf020af9bb7eb73c3712c9e" \
+      io.huggingface.hfs.upstream.image="nousresearch/hermes-agent:v0.23.3@sha256:3e9fe4c6ef36490f43aa0d0d80f9df64e9c92a576eee3042f1a97c8813c05355" \
       io.huggingface.hfs.upstream.version="${HERMES_VERSION}"
 
 ENV PYTHONUNBUFFERED=1 \
@@ -47,8 +47,11 @@ RUN set -eux; \
     chown -R hermes:hermes /data; \
     chmod 0755 /usr/local/bin/hermes-hfs-entrypoint; \
     test -x /opt/hermes/.venv/bin/hermes; \
-    test -f /opt/hermes/.hermes_build_sha; \
-    test "$(tr -d '[:space:]' < /opt/hermes/.hermes_build_sha)" = "${HERMES_SOURCE_REF}"; \
+    test -f /opt/hermes/install-stamp.json; \
+    test -f /etc/hermes/image-provenance.json; \
+    test "$(/opt/hermes/.venv/bin/python -c 'import json; print(json.load(open("/opt/hermes/install-stamp.json", encoding="utf-8"))["commit"])')" = "${HERMES_SOURCE_REF}"; \
+    test "$(/opt/hermes/.venv/bin/python -c 'import json; print(json.load(open("/opt/hermes/install-stamp.json", encoding="utf-8"))["baseVersion"])')" = "${HERMES_VERSION}"; \
+    test "$(/opt/hermes/.venv/bin/python -c 'import json; print(json.load(open("/etc/hermes/image-provenance.json", encoding="utf-8"))["revision"])')" = "${HERMES_SOURCE_REF}"; \
     test "$(/opt/hermes/.venv/bin/python -c 'import sqlite3; print(sqlite3.sqlite_version)')" = "3.53.4"; \
     test "$(/opt/hermes/.venv/bin/python -c 'from hermes_cli import __version__; print(__version__)')" = "${HERMES_VERSION}"; \
     test "$(/opt/hermes/.venv/bin/python -c 'from hermes_cli.config_defaults import DEFAULT_CONFIG; print(DEFAULT_CONFIG.get("_config_version"))')" = "${HERMES_CONFIG_VERSION}"; \

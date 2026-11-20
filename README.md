@@ -31,13 +31,16 @@ The wrapper derives from one immutable upstream release image:
 
 ```text
 repository:     https://github.com/NousResearch/hermes-agent
-release:        v2026.8.3 (Hermes Agent 0.20.0)
-source commit:  3c27eb6234bf91b8ceee9e9071591b31e9b148cb
-image:          nousresearch/hermes-agent:v2026.8.3
-image digest:   sha256:16788311e2fa3035456bdc1bafb8ec2b1777db64ebf020af9bb7eb73c3712c9e
+release:        v0.23.3 (Hermes Agent 0.23.3)
+source commit:  caafe5389ae585ef77387a962aee05b1bcf17029
+image:          nousresearch/hermes-agent:v0.23.3
+image digest:   sha256:3e9fe4c6ef36490f43aa0d0d80f9df64e9c92a576eee3042f1a97c8813c05355
+config schema:  54
 ```
 
 The digest is the multi-architecture manifest published by the upstream release.
+The image build checks that commit and base version in `/opt/hermes/install-stamp.json`;
+startup checks the commit again.
 The wrapper extends that release image, fixes its runtime account to UID/GID
 `1000`, bypasses the root/s6 bootstrap that is incompatible with HF Spaces, and
 keeps `/opt/hermes` immutable. Mutable state belongs under `/data/hermes`; the
